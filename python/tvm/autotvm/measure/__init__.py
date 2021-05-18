@@ -27,6 +27,7 @@ from .measure_methods import (
     LocalBuilder,
     LocalRunner,
     RPCRunner,
+    SimulateRunner,
     default_module_loader,
     request_remote,
 )

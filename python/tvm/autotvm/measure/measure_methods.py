@@ -325,6 +325,105 @@ class RPCRunner(Runner):
 
         return results
 
+class SimulateRunner(RPCRunner):
+    def __init__(
+        self,
+        timeout=10,
+        number=4,
+        repeat=3,
+        min_repeat_ms=0,
+        cooldown_interval=0.1,
+        enable_cpu_cache_flush=False,
+        module_loader=None,
+    ):
+        super(SimulateRunner, self).__init__(
+            "",
+            None,
+            None,
+            0,
+            timeout=timeout,
+            n_parallel=1,
+            number=number,
+            repeat=repeat,
+            min_repeat_ms=min_repeat_ms,
+            cooldown_interval=cooldown_interval,
+            enable_cpu_cache_flush=enable_cpu_cache_flush,
+            module_loader=module_loader,
+        )
+        self.tracker = None
+        self.server = None
+
+    def set_task(self, task):
+        # pylint: disable=import-outside-toplevel
+        from ...rpc.tracker import Tracker
+        from ...rpc.server import Server
+
+        self.task = task
+        tracker = Tracker("0.0.0.0", port=9000, port_end=10000, silent=True)
+        device_key = "$local$device$%d" % tracker.port
+        server = Server(
+            "0.0.0.0",
+            port=9000,
+            port_end=10000,
+            key=device_key,
+            use_popen=True,
+            silent=True,
+            tracker_addr=(tracker.host, tracker.port),
+        )
+        self.key = device_key
+        self.host = tracker.host
+        self.port = tracker.port
+
+        super(SimulateRunner, self).set_task(task)
+        return server, tracker
+
+    def run(self, measure_inputs, build_results):
+        results = []
+        remote_kwargs = dict(
+            device_key=self.key,
+            host=self.host,
+            port=self.port,
+            priority=self.priority,
+            timeout=self.timeout,
+        )
+
+        for i in range(0, len(measure_inputs), self.n_parallel):
+            futures = []
+            for measure_inp, build_res in zip(
+                measure_inputs[i : i + self.n_parallel], build_results[i : i + self.n_parallel]
+            ):
+                module_loader = (
+                    self.module_loader
+                    if self.module_loader is not None
+                    else default_module_loader()
+                )
+                ret = self.executor.submit(
+                    run_through_simulation,
+                    measure_inp,
+                    build_res,
+                    self.number,
+                    self.repeat,
+                    self.min_repeat_ms,
+                    self.cooldown_interval,
+                    remote_kwargs,
+                    self.enable_cpu_cache_flush,
+                    module_loader,
+                )
+                futures.append(ret)
+
+            for future in futures:
+                res = future.get()
+                if isinstance(res, Exception):  # executor error or timeout
+                    results.append(
+                        MeasureResult(
+                            (str(res),), MeasureErrorNo.RUN_TIMEOUT, self.timeout, time.time()
+                        )
+                    )
+                else:
+                    results.append(res)
+
+        return results
+
 
 class LocalRunner(RPCRunner):
     """Run generated code on local devices.
@@ -498,6 +597,98 @@ ModuleLoader = typing.Callable[
     [dict, dict], typing.ContextManager[typing.Tuple[tvm.rpc.RPCSession, tvm.runtime.Module]]
 ]
 
+def formula(IC,OC,W,H,kernel_size):
+    WL = 128
+    BL = 128
+    MA = 8
+    CU = 12
+    PE = 168
+    bits_per_cell = 2
+    w_resolution = 16
+    f_resolution = 16
+    filters_per_MA = BL*bits_per_cell/w_resolution
+    cycles = ((kernel_size**2 * IC) / WL * W * H * (OC / filters_per_MA)) / (MA * CU * PE)
+    total_cycles = f_resolution*cycles + 6
+    cycle_time = 30e-6
+    return total_cycles * cycle_time
+
+def run_through_simulation(
+    measure_input,
+    build_result,
+    number,
+    repeat,
+    min_repeat_ms,
+    cooldown_interval,
+    remote_kwargs,
+    enable_cpu_cache_flush=False,
+    module_loader=None,
+):
+    if isinstance(build_result, MeasureResult):
+        return build_result
+
+    tic = time.time()
+    errno = MeasureErrorNo.NO_ERROR
+    try:
+        # upload built module
+        with module_loader(remote_kwargs, build_result) as (remote, mod):
+            ctx = remote.context(str(measure_input.target), 0)
+
+            # Limitation:
+            # We can not get PackFunction directly in the remote mode as it is wrapped
+            # under the std::function. We could lift the restriction later once we fold
+            # the PackedFunc as an object. Currently, we pass function name to work
+            # around it.
+            f_prepare = "cache_flush_cpu_non_first_arg" if enable_cpu_cache_flush else ""
+            time_f = mod.time_evaluator(
+                mod.entry_name,
+                ctx,
+                number=number,
+                repeat=repeat,
+                min_repeat_ms=min_repeat_ms,
+                f_preproc=f_prepare,
+            )
+
+            try:
+                random_fill = remote.get_function("tvm.contrib.random.random_fill")
+            except AttributeError:
+                raise AttributeError(
+                    "Please make sure USE_RANDOM is ON in the config.cmake " "on the remote devices"
+                )
+            args = [nd.array(np.zeros(x[0], dtype=x[1]), ctx=ctx) for x in build_result.arg_info]
+            if "scatter" not in measure_input.task.name:
+                # the index tensor of scatter op cannot be randomly initialized
+                for arg in args:
+                    random_fill(arg)
+            ctx.sync()
+            #costs = time_f(*args).results       # A tuple with #repeat elements storing time(sec) per each repeat
+            info = measure_input.task.args
+            stride = info[2][0]
+            IC = info[0][1][1]
+            OC = info[1][1][0]
+            H = info[0][1][2]/stride
+            W = info[0][1][3]/stride
+            kernel_size = info[1][1][2]
+            print(formula(IC, OC, W, H, kernel_size))
+            sec = formula(IC, OC, W, H, kernel_size)
+            costs = (sec,sec,sec)
+            #print(measure_input.task.args)
+            #costs = (3.473747439100562e-05, 3.362874125546534e-05, 3.3627202061211745e-05)
+            if len(costs) > 2:  # remove largest and smallest value to reduce variance
+                costs = list(costs)
+                costs.sort()
+                costs = tuple(costs[1:-1])
+
+    except TVMError as exc:
+        msg = str(exc)
+        if "Stack trace returned" in msg:
+            msg = msg[: msg.index("Stack trace returned")]
+        if "CUDA Source" in msg:
+            msg = msg[: msg.index("CUDA Source")]
+        costs = (RuntimeError(msg[:1024]),)
+        errno = MeasureErrorNo.RUNTIME_DEVICE
+    tstamp = time.time()
+    time.sleep(cooldown_interval)
+    return MeasureResult(costs, errno, tstamp - tic + build_result.time_cost, tstamp)
 
 def run_through_rpc(
     measure_input,
@@ -585,7 +776,7 @@ def run_through_rpc(
                     random_fill(arg)
             ctx.sync()
 
-            costs = time_f(*args).results
+            costs = time_f(*args).results       # A list with #repeat elements storing time(sec) per each repeat
 
         if len(costs) > 2:  # remove largest and smallest value to reduce variance
             costs = list(costs)

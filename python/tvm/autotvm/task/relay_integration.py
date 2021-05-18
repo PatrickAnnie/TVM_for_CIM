@@ -151,6 +151,7 @@ def extract_from_multiple_program(mods, params, target, target_host=None, ops=No
     # create tasks for target
     tasks = []
     for task_name, args in env.get_tasks():
+        print(task_name,  args, "\n");
         try:
             tsk = create(task_name, args, target=target, target_host=target_host)
             tasks.append(tsk)

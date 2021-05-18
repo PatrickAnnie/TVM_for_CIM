@@ -18,6 +18,7 @@
 """Base class of tuner"""
 import logging
 import tempfile
+import time
 
 import numpy as np
 
@@ -123,14 +124,16 @@ class Tuner(object):
         GLOBAL_SCOPE.in_tuning = True
         i = error_ct = 0
         errors = []
+
+        evaluate_time=0
         while i < n_trial:
             if not self.has_next():
                 break
-
             configs = self.next_batch(min(n_parallel, n_trial - i))
-
+            tic2 = time.time()
             inputs = [MeasureInput(self.task.target, self.task, config) for config in configs]
             results = measure_batch(inputs)
+            evaluate_time += time.time()-tic2
 
             # keep best config
             for k, (inp, res) in enumerate(zip(inputs, results)):
@@ -167,6 +170,7 @@ class Tuner(object):
             self.ttl = min(early_stopping + self.best_iter, n_trial) - i
 
             self.update(inputs, results)
+            
             for callback in callbacks:
                 callback(self, inputs, results)
 
@@ -181,6 +185,7 @@ class Tuner(object):
             else:
                 logger.setLevel(old_level)
 
+        print("evaluate on device time: ", evaluate_time, "\n")
         if error_ct == i:
             _, f = tempfile.mkstemp(prefix="tvm_tuning_errors_", suffix=".log", text=True)
             with open(f, "w") as file:

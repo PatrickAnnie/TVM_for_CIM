@@ -22,6 +22,7 @@ find optimums points of cost model in space.
 import gc
 
 import numpy as np
+import time
 
 from .tuner import Tuner
 from ..env import GLOBAL_SCOPE
@@ -228,7 +229,7 @@ class ModelBasedTuner(Tuner):
 
     def next_batch(self, batch_size):
         ret = []
-
+        candidates = 0
         counter = 0
         while counter < batch_size:
             if len(self.visited) >= len(self.space):
@@ -243,17 +244,22 @@ class ModelBasedTuner(Tuner):
             if self.trial_pt >= len(self.trials) - int(0.05 * self.plan_size):
                 # if the trial list is empty or
                 # the tuner is doing the last 5% trials (e-greedy), choose randomly
+                tic = time.time()
                 index = np.random.randint(len(self.space))
                 while index in self.visited:
                     index = np.random.randint(len(self.space))
+                candidates += time.time()-tic
+                
 
             ret.append(self.space.get(index))
             self.visited.add(index)
 
             counter += 1
+        print("randomly pick candidates time: ", candidates, "\n")
         return ret
 
     def update(self, inputs, results):
+        tic = time.time()
         for inp, res in zip(inputs, results):
             index = inp.config.index
             if res.error_no == 0:
@@ -264,10 +270,15 @@ class ModelBasedTuner(Tuner):
             else:
                 self.xs.append(index)
                 self.ys.append(0.0)
+        tic2 = time.time()
+        print("update training set time: ", tic2-tic, "\n")
 
         # if we have enough new training samples
         if len(self.xs) >= self.plan_size * (self.train_ct + 1) and self.flops_max > 1e-6:
+            tic = time.time()
             self.cost_model.fit(self.xs, self.ys, self.plan_size)
+            tic2 = time.time()
+            print("fit model time: ", tic2-tic, "\n")
             if self.diversity_filter_ratio:
                 candidate = self.model_optimizer.find_maximums(
                     self.cost_model, self.plan_size * self.diversity_filter_ratio, self.visited
@@ -280,7 +291,7 @@ class ModelBasedTuner(Tuner):
                 maximums = self.model_optimizer.find_maximums(
                     self.cost_model, self.plan_size, self.visited
                 )
-
+            print("SA choose candidates time: ", time.time()-tic2)
             self.trials = maximums
             self.trial_pt = 0
             self.train_ct += 1

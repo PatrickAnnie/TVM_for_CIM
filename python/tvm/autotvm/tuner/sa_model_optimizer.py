@@ -151,6 +151,8 @@ class SimulatedAnnealingOptimizer(ModelOptimizer):
         logger.debug(
             "SA iter: %d\tlast_update: %d\telapsed: %.2f", k, k_last_modify, time.time() - tic
         )
+        #print("\nSA iter: %d\tlast_update: %d\telapsed: %.2f" % (k, k_last_modify, time.time() - tic))
+        #print("SA iter: %d\tlast_update: %d\telapsed: %.2f", k, k_last_modify, time.time() - tic)
         logger.debug("SA Maximums: %s", heap_items)
 
         if self.persistent:

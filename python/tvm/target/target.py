@@ -192,6 +192,18 @@ def cuda(model="unknown", options=None):
     opts = _merge_opts(["-model=%s" % model], options)
     return Target(" ".join(["cuda"] + opts))
 
+def cim(model="unknown", options=None):
+    """Returns a cim_accelerator target.
+
+    Parameters
+    ----------
+    model: str
+        The model of this device
+    options : str or list of str
+        Additional options
+    """
+    opts = _merge_opts(["-model=%s" % model], options)
+    return Target(" ".join(["cim"] + opts))
 
 def rocm(model="unknown", options=None):
     """Returns a ROCM target.

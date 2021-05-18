@@ -235,7 +235,7 @@ def context(dev_type, dev_id=0):
         else:
             dev_type = dev_type.split()[0]
             if dev_type not in TVMContext.STR2MASK:
-                raise ValueError("Unknown device type %s" % dev_type)
+                raise ValueError("Unknown device type %s device id %s" % (dev_type, dev_id))
             dev_type = TVMContext.STR2MASK[dev_type]
     return TVMContext(dev_type, dev_id)
 
@@ -330,6 +330,21 @@ def cpu(dev_id=0):
 
 def gpu(dev_id=0):
     """Construct a GPU device
+
+    Parameters
+    ----------
+    dev_id : int, optional
+        The integer device id
+
+    Returns
+    -------
+    ctx : TVMContext
+        The created context
+    """
+    return TVMContext(2, dev_id)
+
+def cim(dev_id=0):
+    """Construct a cim device
 
     Parameters
     ----------

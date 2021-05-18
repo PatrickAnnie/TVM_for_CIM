@@ -21,7 +21,7 @@ from .xgboost_cost_model import XGBoostCostModel
 from .sa_model_optimizer import SimulatedAnnealingOptimizer
 
 
-class XGBTuner(ModelBasedTuner):
+class XGBTuner(ModelBasedTuner):            #inherit ModelBasedTuner
     """Tuner that uses xgboost as cost model
 
     Parameters

@@ -46,6 +46,7 @@ from .measure import (
     LocalBuilder,
     LocalRunner,
     RPCRunner,
+    SimulateRunner,
 )
 from .tuner import callback
 from .task import (

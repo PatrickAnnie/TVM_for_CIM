@@ -240,7 +240,7 @@ TVM_REGISTER_TARGET_KIND("cuda", kDLGPU)
     .add_attr_option<Integer>("max_threads_per_block")
     .set_default_keys({"cuda", "gpu"});
 
-TVM_REGISTER_TARGET_KIND("cim", kDLGPU)
+TVM_REGISTER_TARGET_KIND("cim", kDLCIM)
     .add_attr_option<String>("mcpu")
     .add_attr_option<String>("arch")
     .add_attr_option<Bool>("system-lib")
@@ -249,7 +249,7 @@ TVM_REGISTER_TARGET_KIND("cim", kDLGPU)
     .add_attr_option<Integer>("shared_memory_per_block")
     .add_attr_option<Integer>("registers_per_block")
     .add_attr_option<Integer>("max_threads_per_block")
-    .set_default_keys({"cim", "gpu"});
+    .set_default_keys({"cim"});
     
 
 TVM_REGISTER_TARGET_KIND("nvptx", kDLGPU)

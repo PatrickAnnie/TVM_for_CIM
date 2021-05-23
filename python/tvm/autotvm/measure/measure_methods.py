@@ -47,6 +47,7 @@ from ..task.space import InstantiationError
 
 from .measure import MeasureResult, MeasureErrorNo, Builder, Runner
 from .local_executor import LocalExecutor
+import math
 
 logger = logging.getLogger("autotvm")
 
@@ -607,8 +608,11 @@ def formula(IC,OC,W,H,kernel_size):
     w_resolution = 16
     f_resolution = 16
     filters_per_MA = BL*bits_per_cell/w_resolution
-    cycles = ((kernel_size**2 * IC) / WL * W * H * (OC / filters_per_MA)) / (MA * CU * PE)
-    total_cycles = f_resolution*cycles + 6
+    #times = ((kernel_size**2 * IC) / WL * W * H * (OC / filters_per_MA)) / (MA * CU * PE)
+    times = math.ceil((math.ceil((kernel_size**2 * IC) / WL) * W * H * math.ceil(OC / filters_per_MA)) / (MA * CU * PE))
+    print("times: ",times)
+    #print(kernel_size,IC,W,H,OC)
+    total_cycles = f_resolution*times + 6
     cycle_time = 30e-6
     return total_cycles * cycle_time
 
@@ -665,8 +669,8 @@ def run_through_simulation(
             stride = info[2][0]
             IC = info[0][1][1]
             OC = info[1][1][0]
-            H = info[0][1][2]/stride
-            W = info[0][1][3]/stride
+            H = math.ceil(info[0][1][2]/stride)
+            W = math.ceil(info[0][1][3]/stride)
             kernel_size = info[1][1][2]
             print(formula(IC, OC, W, H, kernel_size))
             sec = formula(IC, OC, W, H, kernel_size)

@@ -26,7 +26,7 @@ from .module import Module
 # function exposures
 from .object_generic import convert_to_object, convert, const
 from .ndarray import context, cpu, gpu, opencl, cl, vulkan, metal, mtl
-from .ndarray import vpi, rocm, ext_dev, micro_dev
+from .ndarray import vpi, rocm, ext_dev, micro_dev, cim
 from .module import load_module, enabled, system_lib
 from .container import String
 from .params import save_param_dict, load_param_dict

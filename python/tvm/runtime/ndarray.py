@@ -356,7 +356,7 @@ def cim(dev_id=0):
     ctx : TVMContext
         The created context
     """
-    return TVMContext(2, dev_id)
+    return TVMContext(16, dev_id)
 
 
 def rocm(dev_id=0):

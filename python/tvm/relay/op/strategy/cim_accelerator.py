@@ -230,3 +230,25 @@ def conv2d_strategy_cim(attrs, inputs, out_type, target):
         elif not cudnn_impl:
             raise RuntimeError("Unsupported group_conv2d layout {}".format(layout))
     return strategy
+
+@dense_strategy.register(["cim"])
+def dense_strategy_cim(attrs, inputs, out_type, target):
+    """dense cim strategy"""
+    strategy = _op.OpStrategy()
+    data, weights = inputs
+    b, i = get_const_tuple(data.shape)
+    o, _ = get_const_tuple(weights.shape)
+    if data.dtype == "int8" and weights.dtype == "int8" and out_type.dtype == "int32":
+        strategy.add_implementation(
+            wrap_compute_dense(topi.cuda.dense_int8),
+            wrap_topi_schedule(topi.cuda.schedule_dense_int8),
+            name="dense_int8.cuda",
+        )
+    else:
+        strategy.add_implementation(
+            wrap_compute_dense(topi.cim.dense_small_batch),
+            wrap_topi_schedule(topi.cim.schedule_dense_small_batch),
+            name="dense.cim",
+        )
+
+    return strategy

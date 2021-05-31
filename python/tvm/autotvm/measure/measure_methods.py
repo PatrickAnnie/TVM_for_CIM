@@ -158,7 +158,8 @@ class LocalBuilder(Builder):
                 else:
                     # return BuildResult
                     results.append(res)
-
+                    
+        #print(results)
         return results
 
 
@@ -356,27 +357,8 @@ class SimulateRunner(RPCRunner):
 
     def set_task(self, task):
         # pylint: disable=import-outside-toplevel
-        from ...rpc.tracker import Tracker
-        from ...rpc.server import Server
-
         self.task = task
-        tracker = Tracker("0.0.0.0", port=9000, port_end=10000, silent=True)
-        device_key = "$local$device$%d" % tracker.port
-        server = Server(
-            "0.0.0.0",
-            port=9000,
-            port_end=10000,
-            key=device_key,
-            use_popen=True,
-            silent=True,
-            tracker_addr=(tracker.host, tracker.port),
-        )
-        self.key = device_key
-        self.host = tracker.host
-        self.port = tracker.port
-
-        super(SimulateRunner, self).set_task(task)
-        return server, tracker
+        
 
     def run(self, measure_inputs, build_results):
         results = []
@@ -398,9 +380,7 @@ class SimulateRunner(RPCRunner):
                     if self.module_loader is not None
                     else default_module_loader()
                 )
-                ret = self.executor.submit(
-                    run_through_simulation,
-                    measure_inp,
+                ret = run_through_simulation(measure_inp,
                     build_res,
                     self.number,
                     self.repeat,
@@ -408,12 +388,12 @@ class SimulateRunner(RPCRunner):
                     self.cooldown_interval,
                     remote_kwargs,
                     self.enable_cpu_cache_flush,
-                    module_loader,
-                )
+                    module_loader)
                 futures.append(ret)
-
+                #print(ret)
             for future in futures:
-                res = future.get()
+                res = future
+                #res = future.get()
                 if isinstance(res, Exception):  # executor error or timeout
                     results.append(
                         MeasureResult(
@@ -633,54 +613,24 @@ def run_through_simulation(
     tic = time.time()
     errno = MeasureErrorNo.NO_ERROR
     try:
-        # upload built module
-        with module_loader(remote_kwargs, build_result) as (remote, mod):
-            ctx = remote.context(str(measure_input.target), 0)
-
-            # Limitation:
-            # We can not get PackFunction directly in the remote mode as it is wrapped
-            # under the std::function. We could lift the restriction later once we fold
-            # the PackedFunc as an object. Currently, we pass function name to work
-            # around it.
-            f_prepare = "cache_flush_cpu_non_first_arg" if enable_cpu_cache_flush else ""
-            time_f = mod.time_evaluator(
-                mod.entry_name,
-                ctx,
-                number=number,
-                repeat=repeat,
-                min_repeat_ms=min_repeat_ms,
-                f_preproc=f_prepare,
-            )
-
-            try:
-                random_fill = remote.get_function("tvm.contrib.random.random_fill")
-            except AttributeError:
-                raise AttributeError(
-                    "Please make sure USE_RANDOM is ON in the config.cmake " "on the remote devices"
-                )
-            args = [nd.array(np.zeros(x[0], dtype=x[1]), ctx=ctx) for x in build_result.arg_info]
-            if "scatter" not in measure_input.task.name:
-                # the index tensor of scatter op cannot be randomly initialized
-                for arg in args:
-                    random_fill(arg)
-            ctx.sync()
-            #costs = time_f(*args).results       # A tuple with #repeat elements storing time(sec) per each repeat
-            info = measure_input.task.args
-            stride = info[2][0]
-            IC = info[0][1][1]
-            OC = info[1][1][0]
-            H = math.ceil(info[0][1][2]/stride)
-            W = math.ceil(info[0][1][3]/stride)
-            kernel_size = info[1][1][2]
-            print(formula(IC, OC, W, H, kernel_size))
-            sec = formula(IC, OC, W, H, kernel_size)
-            costs = (sec,sec,sec)
-            #print(measure_input.task.args)
-            #costs = (3.473747439100562e-05, 3.362874125546534e-05, 3.3627202061211745e-05)
-            if len(costs) > 2:  # remove largest and smallest value to reduce variance
-                costs = list(costs)
-                costs.sort()
-                costs = tuple(costs[1:-1])
+            
+        #costs = time_f(*args).results       # A tuple with #repeat elements storing time(sec) per each repeat
+        info = measure_input.task.args
+        stride = info[2][0]
+        IC = info[0][1][1]
+        OC = info[1][1][0]
+        H = math.ceil(info[0][1][2]/stride)
+        W = math.ceil(info[0][1][3]/stride)
+        kernel_size = info[1][1][2]
+        print(formula(IC, OC, W, H, kernel_size))
+        sec = formula(IC, OC, W, H, kernel_size)
+        costs = (sec,sec,sec)
+        #print(measure_input.task.args)
+        #costs = (3.473747439100562e-05, 3.362874125546534e-05, 3.3627202061211745e-05)
+        if len(costs) > 2:  # remove largest and smallest value to reduce variance
+            costs = list(costs)
+            costs.sort()
+            costs = tuple(costs[1:-1])
 
     except TVMError as exc:
         msg = str(exc)

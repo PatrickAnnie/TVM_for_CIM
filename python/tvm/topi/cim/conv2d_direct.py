@@ -43,11 +43,11 @@ def schedule_direct_cim(cfg, s, conv):
         cfg.define_knob("unroll_explicit", [0, 1])
 
     # fallback support
-    if cfg.is_fallback:
+    """if cfg.is_fallback:
         ref_log = autotvm.tophub.load_reference_log(
             target.kind.name, target.model, "conv2d_nchw.cuda"
         )
-        cfg.fallback_with_reference_log(ref_log)
+        cfg.fallback_with_reference_log(ref_log)"""
     ##### space definition end #####
 
     pad_data, kernel = s[conv].op.input_tensors

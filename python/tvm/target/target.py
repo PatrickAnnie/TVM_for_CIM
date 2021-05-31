@@ -203,6 +203,7 @@ def cim(model="unknown", options=None):
         Additional options
     """
     opts = _merge_opts(["-model=%s" % model], options)
+    opts = [""]
     return Target(" ".join(["cim"] + opts))
 
 def rocm(model="unknown", options=None):

@@ -184,8 +184,8 @@ def conv2d_strategy_cim(attrs, inputs, out_type, target):
         if layout == "NCHW":
             assert kernel_layout == "OIHW"
             strategy.add_implementation(
-                wrap_compute_conv2d(topi.cuda.depthwise_conv2d_nchw),
-                wrap_topi_schedule(topi.cuda.schedule_depthwise_conv2d_nchw),
+                wrap_compute_conv2d(topi.cim.depthwise_conv2d_nchw),
+                wrap_topi_schedule(topi.cim.schedule_depthwise_conv2d_nchw),
                 name="depthwise_conv2d_nchw.cuda",
             )
         elif layout == "NHWC":
@@ -231,7 +231,7 @@ def conv2d_strategy_cim(attrs, inputs, out_type, target):
             raise RuntimeError("Unsupported group_conv2d layout {}".format(layout))
     return strategy
 
-@dense_strategy.register(["cim"])
+@dense_strategy.register("cim")
 def dense_strategy_cim(attrs, inputs, out_type, target):
     """dense cim strategy"""
     strategy = _op.OpStrategy()
@@ -252,3 +252,32 @@ def dense_strategy_cim(attrs, inputs, out_type, target):
         )
 
     return strategy
+
+@softmax_strategy.register("cim")
+def softmax_strategy_cim(attrs, inputs, out_type, target):
+    """softmax cim strategy"""
+    strategy = _op.OpStrategy()
+    strategy.add_implementation(
+        wrap_compute_softmax(topi.nn.softmax),
+        wrap_topi_schedule(topi.cim.schedule_softmax),
+        name="softmax.cim",
+    )
+    return strategy
+
+@schedule_adaptive_pool.register("cim")
+def schedule_adaptive_pool_cim(attrs, outs, target):
+    """schedule adaptive pooling ops for cim"""
+    with target:
+        return topi.cim.schedule_adaptive_pool(outs, attrs.layout)
+
+@schedule_injective.register("cim")
+def schedule_injective_cim(attrs, outs, target):
+    """schedule injective ops for cim"""
+    with target:
+        return topi.cim.schedule_injective(outs)
+
+@schedule_reduce.register("cim")
+def schedule_reduce_cim(attrs, outs, target):
+    """schedule reduction ops for cim"""
+    with target:
+        return topi.cim.schedule_reduce(outs)

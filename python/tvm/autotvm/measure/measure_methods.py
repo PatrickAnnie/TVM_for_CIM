@@ -590,7 +590,7 @@ def formula(IC,OC,W,H,kernel_size):
     filters_per_MA = BL*bits_per_cell/w_resolution
     #times = ((kernel_size**2 * IC) / WL * W * H * (OC / filters_per_MA)) / (MA * CU * PE)
     times = math.ceil((math.ceil((kernel_size**2 * IC) / WL) * W * H * math.ceil(OC / filters_per_MA)) / (MA * CU * PE))
-    print("times: ",times)
+    #print("times: ",times)
     #print(kernel_size,IC,W,H,OC)
     total_cycles = f_resolution*times + 6
     cycle_time = 30e-6
@@ -607,8 +607,8 @@ def run_through_simulation(
     enable_cpu_cache_flush=False,
     module_loader=None,
 ):
-    if isinstance(build_result, MeasureResult):
-        return build_result
+    """if isinstance(build_result, MeasureResult):
+        return build_result"""
 
     tic = time.time()
     errno = MeasureErrorNo.NO_ERROR
@@ -622,7 +622,7 @@ def run_through_simulation(
         H = math.ceil(info[0][1][2]/stride)
         W = math.ceil(info[0][1][3]/stride)
         kernel_size = info[1][1][2]
-        print(formula(IC, OC, W, H, kernel_size))
+        #print(formula(IC, OC, W, H, kernel_size))
         sec = formula(IC, OC, W, H, kernel_size)
         costs = (sec,sec,sec)
         #print(measure_input.task.args)
@@ -642,7 +642,9 @@ def run_through_simulation(
         errno = MeasureErrorNo.RUNTIME_DEVICE
     tstamp = time.time()
     time.sleep(cooldown_interval)
-    return MeasureResult(costs, errno, tstamp - tic + build_result.time_cost, tstamp)
+    
+    #return MeasureResult(costs, errno, tstamp - tic + build_result.time_cost, tstamp)
+    return MeasureResult(costs, errno, tstamp - tic + costs[0], tstamp)
 
 def run_through_rpc(
     measure_input,
